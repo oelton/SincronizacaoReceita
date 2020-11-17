@@ -16,6 +16,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,6 +51,19 @@ public class CompletableFutureService {
 
         generateFile(futures);
 
+    }
+
+    //TODO  utilizar esse metodo para controlar o tempo de execucao das threads,
+    // caso seja excedido definir o false para o resultado da analise.
+    private static void interruptExecution(AtomicBoolean cancelled, List<String> line, CompletableFuture<?> result) {
+        // Interromper a execucao se chegar no tempo limite
+        try {
+            result.get(10, TimeUnit.MINUTES);
+        } catch (TimeoutException | InterruptedException | ExecutionException e) {
+            cancelled.set(true);
+            line.add(Boolean.FALSE.toString());
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void generateFile(List<CompletableFuture<List<String>>> futures) {
