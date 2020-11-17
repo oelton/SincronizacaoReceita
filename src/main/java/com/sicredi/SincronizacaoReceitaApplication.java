@@ -38,21 +38,21 @@ public class SincronizacaoReceitaApplication {
     public static void main(String[] args) {
         ApplicationContext context
                 = new AnnotationConfigApplicationContext(SincronizacaoReceitaApplication.class);
-        for(String arg:args) {
+        for (String arg : args) {
             LOGGER.info("argumento: {}", arg);
         }
         SincronizacaoReceitaApplication p = context.getBean(SincronizacaoReceitaApplication.class);
         p.start(args);
     }
 
-    private void start(String[] args){
+    private void start(String[] args) {
         ClassLoader classLoader = SincronizacaoReceitaApplication.class.getClassLoader();
         String fileName = classLoader.getResource("receita.csv").getFile();
 
-        if (args == null ) {
+        if (args == null) {
             LOGGER.info("Caminho do arquivo nao informado");
             initiateShutdown(0);
-        } else if(args.length > 0 && args[0]!=null){
+        } else if (args.length > 0 && args[0] != null) {
             fileName = args[0];
         }
 
@@ -110,12 +110,11 @@ public class SincronizacaoReceitaApplication {
 
     private void generateFile(List<CompletableFuture<List<String>>> futures) {
         try {
-            List<List<String>> retorno = CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(unused -> {
-                return futures.stream().map(listCompletableFuture -> listCompletableFuture.join()).collect(Collectors.toList());
-            }).thenApply(lists -> {
-                LOGGER.info(String.valueOf(lists));
-                return lists;
-            }).get();
+            List<List<String>> retorno = CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(unused ->
+                    futures.stream().map(CompletableFuture::join).collect(Collectors.toList())
+            ).thenApply(lists ->
+                    lists
+            ).get();
 
             writeCVSCompletableFuture(retorno);
         } catch (InterruptedException e) {
@@ -136,7 +135,7 @@ public class SincronizacaoReceitaApplication {
             }
         } catch (IOException e) {
             LOGGER.error("Erro na escrita do arquivio. Erro: {}", e.getLocalizedMessage());
-        }finally {
+        } finally {
             initiateShutdown(0);
         }
     }
@@ -180,8 +179,7 @@ public class SincronizacaoReceitaApplication {
         return Boolean.FALSE;
     }
 
-    public void initiateShutdown(int returnCode)
-    {
+    public void initiateShutdown(int returnCode) {
         LOGGER.info("Shutting Down Servico");
         int exitCode = SpringApplication.exit(appContext, () -> returnCode);
         System.exit(exitCode);
