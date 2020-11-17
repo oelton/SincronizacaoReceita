@@ -11,7 +11,7 @@
   * Na classe *CompletableFutureService*     
     - Resulta no arquivo *resultCompletableFuture.csv*
     - Executa de forma assincrona e as threads sao gerenciadas pela classe de configuracao *AsyncConfiguration*.
-      Existe a possibilidade de utilizar um recurso para interromper a execucao da thread que passar de um tempo de execucao pre-determinado.
+      Pode-se utilizar um recurso para interromper a execucao da thread que passar de um tempo de execucao pre-determinado.
         Existe um TO-DO para o metodo *interruptExecution*
     - Foi criado um metodo que finaliza a execucao do programa ao completar a escrita do arquivo(*initiateShutdown*), porem poderia utilizar o actuator/shutdown
       caso fosse uma aplicacao restfull. Ou criar um scheduling definindo o cron para executar todos os dias a partir das 06 horas e nao ter a necessidade de interromper a execucao e para isso, teria que definir um local especifico de onde ler os arquivos que serao processados.
@@ -20,4 +20,4 @@
 
 # instrucao para executar:
   java -jar SincronizacaoReceita-0.0.1.jar "path/file.csv"
-  Onde path/file.csv eh o caminho e nome do arquivo que sera lido
+  Onde path/file.csv é o caminho e nome do arquivo que sera lido
