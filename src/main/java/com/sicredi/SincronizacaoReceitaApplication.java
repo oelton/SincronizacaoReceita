@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 import java.io.*;
 import java.text.NumberFormat;
@@ -25,31 +27,56 @@ public class SincronizacaoReceitaApplication {
     private static final Logger LOGGER = LoggerFactory.getLogger(SincronizacaoReceitaApplication.class);
     public static final String PROBLEMA_NA_IMPORTACAO_PARA_O_REGISTRO_AGENCIA_CONTA_SALDO_STATUS_ERROR = "Problema na importacao para o registro -> Agencia: {}, Conta: {}, saldo: {}, status: {}, error: {}";
 
-    private static List<List<String>> lines = new ArrayList<>();
-    private static ImportFile importFile;
+    private static List<List<String>> linesCompletableFuture = new ArrayList<>();
+    private static List<List<String>> linesStream = new ArrayList<>();
 
     @Autowired
-    public SincronizacaoReceitaApplication(ImportFile file) {
-        importFile = file;
-    }
+    private ImportFile importFile;
+    @Autowired
+    private ApplicationContext appContext;
 
     public static void main(String[] args) {
+        ApplicationContext context
+                = new AnnotationConfigApplicationContext(SincronizacaoReceitaApplication.class);
+        for(String arg:args) {
+            LOGGER.info("argumento: {}", arg);
+        }
+        SincronizacaoReceitaApplication p = context.getBean(SincronizacaoReceitaApplication.class);
+        p.start(args);
+    }
+
+    private void start(String[] args){
         ClassLoader classLoader = SincronizacaoReceitaApplication.class.getClassLoader();
+        String fileName = classLoader.getResource("receita.csv").getFile();
+
+        if (args.length > 0 && args[0]!= null){
+            fileName = args[0];
+        }else {
+            LOGGER.info("Caminho do arquivo nao informado");
+            initiateShutdown(0);
+        }
 
         NumberFormat format = NumberFormat.getInstance(Locale.getDefault());
 
-        SpringApplication.run(SincronizacaoReceitaApplication.class, args);
-        try (Scanner scanner = new Scanner(new File(classLoader.getResource("receita.csv").getFile()))) {
+        try (Scanner scanner = new Scanner(new File(fileName))) {
             while (scanner.hasNextLine()) {
-                lines.add(readCVS(scanner.nextLine()));
+                List<String> newLine = readCVS(scanner.nextLine());
+                linesCompletableFuture.add(new ArrayList<>(newLine));
+                linesStream.add(new ArrayList<>(newLine));
             }
         } catch (FileNotFoundException e) {
             LOGGER.error("Arquivo nao encontrado. Erro: {}", e.getLocalizedMessage());
         }
-        usingParallelStream(format);
+        if (linesStream.isEmpty()) {
+            LOGGER.info("Arquivo nao encontrado!");
+            initiateShutdown(0);
+        } else {
+            //Exemplo usando parallel stream
+            usingParallelStream(format);
 
-        usingCompletableFutureRefactor();
-
+            //Exemplo usando completable future
+            usingCompletableFutureRefactor();
+        }
     }
 
     private static List<String> readCVS(String line) {
@@ -63,11 +90,11 @@ public class SincronizacaoReceitaApplication {
         return values;
     }
 
-    private static void usingCompletableFutureRefactor() {
+    private void usingCompletableFutureRefactor() {
 
         List<CompletableFuture<List<String>>> futures = new ArrayList<>();
 
-        lines.stream().skip(1).forEach(line -> {
+        linesCompletableFuture.stream().skip(1).forEach(line -> {
             try {
                 futures.add(importFile.importCVS(line));
             } catch (ParseException e) {
@@ -81,11 +108,11 @@ public class SincronizacaoReceitaApplication {
 
     }
 
-    private static void generateFile(List<CompletableFuture<List<String>>> futures) {
+    private void generateFile(List<CompletableFuture<List<String>>> futures) {
         try {
-            List<List<String>> retorno = CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(unused ->
-                    futures.stream().map(CompletableFuture::join).collect(Collectors.toList())
-            ).thenApply(lists -> {
+            List<List<String>> retorno = CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(unused -> {
+                return futures.stream().map(listCompletableFuture -> listCompletableFuture.join()).collect(Collectors.toList());
+            }).thenApply(lists -> {
                 LOGGER.info(String.valueOf(lists));
                 return lists;
             }).get();
@@ -99,21 +126,23 @@ public class SincronizacaoReceitaApplication {
         }
     }
 
-    private static void writeCVSCompletableFuture(List<List<String>> strings) {
+    private void writeCVSCompletableFuture(List<List<String>> strings) {
         File csvFile = new File("resultCompletableFuture.csv");
         try (PrintWriter csvWriter = new PrintWriter(new FileWriter(csvFile));) {
-            lines.get(0).add("processado");
-            csvWriter.println(lines.get(0).stream().map(String::trim).collect(Collectors.joining(";")));
+            linesCompletableFuture.get(0).add("processado");
+            csvWriter.println(linesCompletableFuture.get(0).stream().map(String::trim).collect(Collectors.joining(";")));
             for (List<String> item : strings) {
                 csvWriter.println(item.stream().map(String::trim).collect(Collectors.joining(";")));
             }
         } catch (IOException e) {
             LOGGER.error("Erro na escrita do arquivio. Erro: {}", e.getLocalizedMessage());
+        }finally {
+            initiateShutdown(0);
         }
     }
 
-    private static void usingParallelStream(NumberFormat format) {
-        lines.parallelStream().skip(1).forEach(line -> {
+    private void usingParallelStream(NumberFormat format) {
+        linesStream.parallelStream().skip(1).forEach(line -> {
             try {
                 line.add(importCVSAsync(line.get(0), line.get(1), format.parse(line.get(2)).doubleValue(), line.get(3)).toString());
             } catch (ParseException e) {
@@ -123,10 +152,10 @@ public class SincronizacaoReceitaApplication {
             }
         });
 
-        writeCVSStream(lines);
+        writeCVSStream(linesStream);
     }
 
-    private static void writeCVSStream(List<List<String>> strings) {
+    private void writeCVSStream(List<List<String>> strings) {
         File csvFile = new File("resultStream.csv");
         try (PrintWriter csvWriter = new PrintWriter(new FileWriter(csvFile));) {
             strings.get(0).add("processado");
@@ -138,7 +167,7 @@ public class SincronizacaoReceitaApplication {
         }
     }
 
-    public static Boolean importCVSAsync(String agencia, String conta, double saldo, String status) {
+    public Boolean importCVSAsync(String agencia, String conta, double saldo, String status) {
         try {
             return new ReceitaService().atualizarConta(agencia, conta, saldo, status);
         } catch (RuntimeException e) {
@@ -149,5 +178,12 @@ public class SincronizacaoReceitaApplication {
         }
         LOGGER.info("return error");
         return Boolean.FALSE;
+    }
+
+    public void initiateShutdown(int returnCode)
+    {
+        LOGGER.info("Shutting Down Servico");
+        int exitCode = SpringApplication.exit(appContext, () -> returnCode);
+        System.exit(exitCode);
     }
 }
