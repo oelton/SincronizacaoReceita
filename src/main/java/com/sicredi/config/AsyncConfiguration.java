@@ -17,8 +17,8 @@ public class AsyncConfiguration {
     public Executor taskExecutor() {
         LOGGER.debug("Criando Async Task Executor");
         final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(2);
+        executor.setCorePoolSize(3);
+        executor.setMaxPoolSize(3);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("SicredThread-");
         executor.initialize();
