@@ -17,9 +17,6 @@ import java.util.Locale;
 import java.util.Scanner;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @SpringBootApplication
@@ -29,12 +26,10 @@ public class SincronizacaoReceitaApplication {
     public static final String PROBLEMA_NA_IMPORTACAO_PARA_O_REGISTRO_AGENCIA_CONTA_SALDO_STATUS_ERROR = "Problema na importacao para o registro -> Agencia: {}, Conta: {}, saldo: {}, status: {}, error: {}";
 
     private static List<List<String>> lines = new ArrayList<>();
-    private static List<List<String>> newLines = new ArrayList<>();
-
     private static ImportFile importFile;
 
     @Autowired
-    public SincronizacaoReceitaApplication(ImportFile file){
+    public SincronizacaoReceitaApplication(ImportFile file) {
         importFile = file;
     }
 
@@ -57,7 +52,7 @@ public class SincronizacaoReceitaApplication {
 
     }
 
-    private static List<String> readCVS(String line){
+    private static List<String> readCVS(String line) {
         List<String> values = new ArrayList<>();
         try (Scanner rowScanner = new Scanner(line)) {
             rowScanner.useDelimiter(";");
@@ -88,9 +83,9 @@ public class SincronizacaoReceitaApplication {
 
     private static void generateFile(List<CompletableFuture<List<String>>> futures) {
         try {
-            List<List<String>> retorno = CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(unused -> {
-                return futures.stream().map(listCompletableFuture -> listCompletableFuture.join()).collect(Collectors.toList());
-            }).thenApply(lists -> {
+            List<List<String>> retorno = CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(unused ->
+                    futures.stream().map(CompletableFuture::join).collect(Collectors.toList())
+            ).thenApply(lists -> {
                 LOGGER.info(String.valueOf(lists));
                 return lists;
             }).get();
@@ -105,26 +100,15 @@ public class SincronizacaoReceitaApplication {
     }
 
     private static void writeCVSCompletableFuture(List<List<String>> strings) {
-        File csvFile = new File("result.csv");
-        try (PrintWriter csvWriter = new PrintWriter(new FileWriter(csvFile));){
+        File csvFile = new File("resultCompletableFuture.csv");
+        try (PrintWriter csvWriter = new PrintWriter(new FileWriter(csvFile));) {
             lines.get(0).add("processado");
-            csvWriter.println(lines.get(0).stream().map(s -> s.trim()).collect(Collectors.joining(";")));
-            for(List<String> item : strings){
-                csvWriter.println(item.stream().map(s -> s.trim()).collect(Collectors.joining(";")));
+            csvWriter.println(lines.get(0).stream().map(String::trim).collect(Collectors.joining(";")));
+            for (List<String> item : strings) {
+                csvWriter.println(item.stream().map(String::trim).collect(Collectors.joining(";")));
             }
         } catch (IOException e) {
             LOGGER.error("Erro na escrita do arquivio. Erro: {}", e.getLocalizedMessage());
-        }
-    }
-
-    private static void interruptExecution(AtomicBoolean cancelled, List<String> line, CompletableFuture<?> result) {
-        // Interromper a execucao se chegar no tempo limite
-        try {
-            result.get(10, TimeUnit.MINUTES);
-        } catch (TimeoutException | InterruptedException | ExecutionException e) {
-            cancelled.set(true);
-            line.add(Boolean.FALSE.toString());
-            Thread.currentThread().interrupt();
         }
     }
 
@@ -141,54 +125,29 @@ public class SincronizacaoReceitaApplication {
 
         writeCVSStream(lines);
     }
+
     private static void writeCVSStream(List<List<String>> strings) {
         File csvFile = new File("resultStream.csv");
-        try (PrintWriter csvWriter = new PrintWriter(new FileWriter(csvFile));){
+        try (PrintWriter csvWriter = new PrintWriter(new FileWriter(csvFile));) {
             strings.get(0).add("processado");
-            for(List<String> item : strings){
-                csvWriter.println(item.stream().map(s -> s.trim()).collect(Collectors.joining(";")));
+            for (List<String> item : strings) {
+                csvWriter.println(item.stream().map(String::trim).collect(Collectors.joining(";")));
             }
         } catch (IOException e) {
             LOGGER.error("Erro na escrita do arquivo. Erro: {}", e.getLocalizedMessage());
         }
     }
 
-    public static Boolean importCVSAsync(String agencia, String conta, double saldo, String status){
+    public static Boolean importCVSAsync(String agencia, String conta, double saldo, String status) {
         try {
             return new ReceitaService().atualizarConta(agencia, conta, saldo, status);
         } catch (RuntimeException e) {
             LOGGER.error(PROBLEMA_NA_IMPORTACAO_PARA_O_REGISTRO_AGENCIA_CONTA_SALDO_STATUS_ERROR,
-                    agencia, conta,  saldo, status, e.getLocalizedMessage());
-        } catch (InterruptedException e){
+                    agencia, conta, saldo, status, e.getLocalizedMessage());
+        } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
         LOGGER.info("return error");
         return Boolean.FALSE;
-    }
-
-    private static void usingCompletableFuture(NumberFormat format) {
-        AtomicBoolean cancelled = new AtomicBoolean(false);
-
-        lines.stream().skip(1).forEach(line -> {
-            try {
-                CompletableFuture<Boolean> result = importFile.importCVS(line.get(0), line.get(1), format.parse(line.get(2)).doubleValue(), line.get(3));
-                CompletableFuture.allOf(result).thenAcceptAsync(unused -> {
-                    try {
-                        line.add(result.get().toString());
-                        newLines.addAll(lines);
-                    } catch (InterruptedException | ExecutionException e){
-                        Thread.currentThread().interrupt();
-                        line.add(Boolean.FALSE.toString());
-                    }
-                });
-
-                interruptExecution(cancelled, line, result);
-
-            } catch (ParseException e) {
-                line.add(Boolean.FALSE.toString());
-                LOGGER.error(PROBLEMA_NA_IMPORTACAO_PARA_O_REGISTRO_AGENCIA_CONTA_SALDO_STATUS_ERROR,
-                        line.get(0), line.get(1), line.get(2), line.get(3), e.getLocalizedMessage());
-            }
-        });
     }
 }
