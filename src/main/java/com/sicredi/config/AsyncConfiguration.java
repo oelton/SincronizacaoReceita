@@ -15,7 +15,7 @@ public class AsyncConfiguration {
     private static final Logger LOGGER = LoggerFactory.getLogger(AsyncConfiguration.class);
     @Bean(name = "taskExecutor")
     public Executor taskExecutor() {
-        LOGGER.debug("Creating Async Task Executor");
+        LOGGER.debug("Criando Async Task Executor");
         final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(2);
