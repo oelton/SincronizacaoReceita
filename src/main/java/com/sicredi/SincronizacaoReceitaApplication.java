@@ -49,11 +49,11 @@ public class SincronizacaoReceitaApplication {
         ClassLoader classLoader = SincronizacaoReceitaApplication.class.getClassLoader();
         String fileName = classLoader.getResource("receita.csv").getFile();
 
-        if (args.length > 0 && args[0]!= null){
-            fileName = args[0];
-        }else {
+        if (args == null ) {
             LOGGER.info("Caminho do arquivo nao informado");
             initiateShutdown(0);
+        } else if(args.length > 0 && args[0]!=null){
+            fileName = args[0];
         }
 
         NumberFormat format = NumberFormat.getInstance(Locale.getDefault());
